@@ -17,23 +17,33 @@ def index(request: Request, msg: str | None = None):
 
 @app.get("/echo", response_class=HTMLResponse)
 def echo(request: Request, msg: str | None = None):
-    return templates.TemplateResponse("index.html", {"request": request, "message": msg or ""})
+    return templates.TemplateResponse(
+        request,
+        "index.html",
+        {"message": msg or "Hello!"}
+    )
 
 @app.get("/search")
 def search(q: str | None = None):
-    # SQLi: намеренно подставляем строку без параметров
     if q:
-        sql = f"SELECT id, name, description FROM items WHERE name LIKE '%{q}%'"
+        # S06: параметризованный LIKE вместо подстановки строки (защита от SQLi в search)
+        sql = "SELECT id, name, description FROM items WHERE name LIKE ?"
+        params = [f"%{q}%"]
     else:
         sql = "SELECT id, name, description FROM items LIMIT 10"
-    return JSONResponse(content={"items": query(sql)})
+        params: list[Any] = []
+    items = query(sql, params)
+    return JSONResponse(content={"items": items})
 
 @app.post("/login")
 def login(payload: LoginRequest):
-    # SQLi: обход авторизации через username="admin'-- " или password-инъекции
-    sql = f"SELECT id, username FROM users WHERE username = '{payload.username}' AND password = '{payload.password}'"
-    row = query_one(sql)
+    """
+    S06: убрали конкатенацию в SQL и перешли на параметризованный запрос,
+    чтобы закрыть обход авторизации через SQL-инъекцию.
+    """
+    sql = "SELECT id, username FROM users WHERE username = ? AND password = ?"
+    row = query_one(sql, [payload.username, payload.password])
     if not row:
         raise HTTPException(status_code=HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-    # фиктивный токен
+    # фиктивный токен (для учебного шаблона этого достаточно)
     return {"status": "ok", "user": row["username"], "token": "dummy"}

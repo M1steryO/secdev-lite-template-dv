@@ -1,4 +1,3 @@
-
 FROM python:3.11-slim
 
 # —— Runtime env ————————————————————————————————————————————————
@@ -11,8 +10,17 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # —— App —————————————————————————————————————————————————————————
+
 COPY app ./app
 COPY scripts ./scripts
+
+# S07-03: Конфигурируем пользователя без root-прав и назначаем ему владение директориями приложения
+RUN useradd -m -u 10001 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# S07-06: Добавлен healthcheck, который подтверждает, что сервис отвечает на корневой запрос
+HEALTHCHECK --interval=10s --timeout=3s --retries=5 \
+CMD python -c "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/').read()" || exit 1
 
 EXPOSE 8000
 
